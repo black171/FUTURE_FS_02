@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM Dashboard | Analytics</title>
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="dashboard-body">
+
+<div id="login-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#0f172a; z-index:9999; display:flex; align-items:center; justify-content:center;">
+  <div class="card glass p-4 text-center shadow-lg" style="max-width:360px;">
+    <h3 class="fw-bold text-white mb-2">Admin Portal</h3>
+    <p class="text-muted small mb-4">Enter your PIN to manage leads</p>
+    <input type="password" id="admin-pass" class="form-control custom-input mb-3 text-center" placeholder="••••">
+    <button onclick="checkAuth()" class="btn btn-gradient w-100">Login</button>
+  </div>
+</div>
+
+<div class="container py-5" id="main-content" style="display:none;">
+  
+  <header class="d-flex flex-wrap justify-content-between align-items-center mb-5 gap-3">
+    <div>
+      <h2 class="fw-bold text-white mb-0">📊 CRM Intelligence</h2>
+      <p class="text-muted small mb-0">Performance Overview & Lead Pipeline</p>
+    </div>
+    <div class="d-flex gap-2">
+      <input type="text" id="searchInput" class="form-control custom-input form-control-sm" placeholder="Search leads..." onkeyup="filterLeads()">
+      <button onclick="loadLeads()" class="btn btn-gradient btn-sm px-4 shadow">🔄 Refresh</button>
+    </div>
+  </header>
+
+  <div class="row g-4 mb-5">
+    <div class="col-md-4">
+      <div class="card glass p-4 text-center border-0">
+        <small class="text-muted fw-bold text-uppercase">Total Leads</small>
+        <h1 id="stat-total" class="display-6 fw-bold mt-2">0</h1>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card glass p-4 text-center border-0">
+        <small class="text-muted fw-bold text-uppercase">Conversion Rate</small>
+        <h1 id="stat-rate" class="display-6 fw-bold text-success mt-2">0%</h1>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card glass p-4 text-center border-0">
+        <small class="text-muted fw-bold text-uppercase">Active Pipeline</small>
+        <h1 id="stat-active" class="display-6 fw-bold text-info mt-2">0</h1>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-4 mb-4">
+      <div class="card glass p-4 h-100 border-0 shadow">
+        <h6 class="fw-bold mb-4 text-center">Status Distribution</h6>
+        <div style="height:250px;"><canvas id="statusChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="col-lg-8 mb-4">
+      <div class="card glass p-4 h-100 border-0 shadow">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr class="text-muted small text-uppercase">
+                <th class="border-0">Lead Details</th>
+                <th class="border-0">Status</th>
+                <th class="border-0">Admin Notes</th>
+                <th class="border-0 text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody id="leadTable">
+              </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let myChart = null;
+
+// --- Security Check ---
+function checkAuth() {
+  const pass = document.getElementById("admin-pass").value;
+  if (pass === "admin123") {
+    document.getElementById("login-overlay").remove();
+    document.getElementById("main-content").style.display = "block";
+    loadLeads();
+  } else {
+    alert("Access Denied: Incorrect PIN");
+  }
+}
+
+// --- Data Fetching ---
+async function loadLeads() {
+  try {
+    const res = await fetch("/api/leads");
+    const leads = await res.json();
+    updateAnalytics(leads);
+    renderTable(leads);
+  } catch (err) {
+    console.error("Error loading leads:", err);
+  }
+}
+
+// --- KPI & Chart Logic ---
+function updateAnalytics(leads) {
+  const total = leads.length;
+  const counts = { new: 0, contacted: 0, converted: 0 };
+  
+  leads.forEach(l => {
+    if (counts.hasOwnProperty(l.status)) counts[l.status]++;
+  });
+
+  const rate = total > 0 ? ((counts.converted / total) * 100).toFixed(1) : 0;
+  
+  document.getElementById("stat-total").innerText = total;
+  document.getElementById("stat-rate").innerText = rate + "%";
+  document.getElementById("stat-active").innerText = counts.new + counts.contacted;
+
+  const ctx = document.getElementById('statusChart').getContext('2d');
+  if (myChart) myChart.destroy();
+  
+  myChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['New', 'Contacted', 'Converted'],
+      datasets: [{
+        data: [counts.new, counts.contacted, counts.converted],
+        backgroundColor: ['#38bdf8', '#fbbf24', '#22c55e'],
+        borderWidth: 0,
+        hoverOffset: 10
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 12 } } }
+      },
+      cutout: '75%'
+    }
+  });
+}
+
+// --- Table Rendering ---
+function renderTable(leads) {
+  const table = document.getElementById("leadTable");
+  table.innerHTML = "";
+
+  leads.forEach(lead => {
+    const tr = document.createElement("tr");
+    tr.className = `status-row-${lead.status}`;
+    tr.innerHTML = `
+      <td style="max-width: 200px;">
+        <div class="fw-bold text-white">${lead.name}</div>
+        <div class="small text-muted">${lead.email}</div>
+        <div class="text-info opacity-75 small mt-1 text-truncate" title="${lead.message}" style="cursor:help;">
+          💬 ${lead.message}
+        </div>
+        <span class="badge bg-dark text-muted border border-secondary mt-1" style="font-size:9px;">VIA ${lead.source || 'WEB'}</span>
+      </td>
+      <td>
+        <select class="form-select form-select-sm custom-input" onchange="updateLead('${lead._id}', {status: this.value})">
+          <option value="new" ${lead.status==='new'?'selected':''}>New</option>
+          <option value="contacted" ${lead.status==='contacted'?'selected':''}>Contacted</option>
+          <option value="converted" ${lead.status==='converted'?'selected':''}>Converted</option>
+        </select>
+      </td>
+      <td>
+        <input type="text" class="form-control form-control-sm custom-input" 
+               placeholder="Follow-up note..." 
+               value="${lead.notes || ''}" 
+               onchange="updateLead('${lead._id}', {notes: this.value})">
+      </td>
+      <td class="text-end">
+        <button onclick="deleteLead('${lead._id}')" class="btn btn-sm btn-link text-danger p-0">🗑️</button>
+      </td>
+    `;
+    table.appendChild(tr);
+  });
+}
+
+// --- Search/Filter Logic ---
+function filterLeads() {
+  const query = document.getElementById("searchInput").value.toLowerCase();
+  document.querySelectorAll("#leadTable tr").forEach(row => {
+    row.style.display = row.innerText.toLowerCase().includes(query) ? "" : "none";
+  });
+}
+
+// --- CRUD Actions ---
+async function updateLead(id, data) {
+  await fetch(`/api/leads/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+  loadLeads(); // Live refresh
+}
+
+async function deleteLead(id) {
+  if (confirm("Permanently delete this lead?")) {
+    await fetch(`/api/leads/${id}`, { method: "DELETE" });
+    loadLeads();
+  }
+}
+</script>
+</body>
+</html>
