@@ -17,7 +17,7 @@ A streamlined, dark-mode CRM designed for small businesses to track incoming lea
 * **Database:** MongoDB via Mongoose
 
 ## 📦 Setup Instructions
-1. Clone the repo: `git clone [YOUR_REPO_URL]`
+1. Clone the repo: `git clone https://github.com/black171/FUTURE_FS_02`
 2. Install dependencies: `npm install`
 3. Create a `.env` file and add your `MONGO_URI`.
 4. Start the server: `npm start`
